@@ -77,21 +77,22 @@ class LibraryReservation:
     def submitCode(self, code_str, roomId, seatId):  # 提交验证码
         url = "http://172.16.47.84/Verify.aspx?seatid=" + roomId + seatId
         data = {
-            '__VIEWSTATE': self.VIEWSTATE,
-            '__EVENTVALIDATION': self.EVENTVALIDATION,
-            '__VIEWSTATEGENERATOR': self.VIEWSTATEGENERATOR,
+            "__VIEWSTATE": "/wEPDwUKMTcwNzM5ODc3NGRkxk3OrVjxT6behMtQpWcazajx8PyvSuwHitNzRtt/hW8=",
+            "__VIEWSTATEGENERATOR": "460BFA5D",
+            "__EVENTVALIDATION": "/wEdAANkcH5/1fjT1VTtjqvpdy4W7hv76BH8vu7iM4tkb8en1c34O/GfAV4V4n0wgFZHr3dW6dTyTKTMqYOytm8RFUOrs5GAAAhg2KMXDmC1pQgTog==",
             "TextBox3": code_str,
             "Button1": "提      交"
         }
 
         headers = {
+            'Host': '172.16.47.84',
             'Connection': 'Keep-Alive',
             'Accept-Language': 'zh-CN,zh;q=0.8',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36 SE 2.X MetaSr 1.0',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/58.0.3029.110 Safari/537.36 SE 2.X MetaSr 1.0',
             'Accept-Encoding': 'gzip, deflate, sdch',
             'Upgrade-Insecure-Requests': '1',
-            'Host': '172.16.47.84',
             "Content-Type": "application/x-www-form-urlencoded",
             "Referer": "http://172.16.47.84/Verify.aspx?seatid=" + roomId + seatId,
         }
@@ -170,11 +171,12 @@ class LibraryReservation:
             'Connection': 'keep-alive'
         }
         get_rsp = self.session.get(url, headers=headers)
-        get_rsp.encoding = 'utf8'
         if '该座位不可用，每天18:20开放明日预约！' in get_rsp.text:
             return '该座位不可用，每天18:20开放明日预约！'
         if '该座位已经有人预约了，请试试其它座位！' in get_rsp.text:
             return '该座位已经有人预约了，请试试其它座位！'
+        if '您已经预约了明日座位，不可重复预约！' in get_rsp.text:
+            return '您已经预约了明日座位，不可重复预约！'
         # 否则就是返回验证码
         # 获取验证码
         img_content = self.getCode(roomId + seatId)
@@ -200,6 +202,7 @@ class LibraryReservation:
             return '该座位不可用，每天18:20开放明日预约！'
         if '该座位已经有人预约了，请试试其它座位！' in post_rsp.text:
             return '该座位已经有人预约了，请试试其它座位！'
+
 
 
 def loadAccount():
