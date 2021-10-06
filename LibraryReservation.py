@@ -2,6 +2,7 @@ import re
 import base64
 import requests
 from bs4 import BeautifulSoup
+import threading
 
 
 class LibraryReservation:
@@ -51,6 +52,8 @@ class LibraryReservation:
             'TextBox2': password,
             'Button1': '%E7%99%BB++++++%E5%BD%95'
         }
+
+        # 读取教室信息
         post_log = self.session.post(url_log, data=data_log)
         if '帐号或密码错误' in post_log.text:
             return '帐号或密码错误'
@@ -60,7 +63,7 @@ class LibraryReservation:
         else:
             return '未知错误' + post_log.text
 
-    def getddlDay(self):  # 获取教室编号ddlDay=[今日||明日]
+    def getddlDay(self):  # 获取教室编号ddlDay=[今日||明日] 返回{房间编号:房间号}
         url = 'http://172.16.47.84/DayNavigation.aspx'
         get = self.session.get(url)
         get.encoding = 'utf-8'
@@ -68,31 +71,40 @@ class LibraryReservation:
         select_rooms = bs_get.select('[name=ddlRoom] option')
         rooms_id = {}
         for select in select_rooms:
-            rooms_id[select.text] = select['value'][:-3]
+            rooms_id[select['value'][:-3]] = select.text
         return rooms_id
 
-    def submitCode(self, code_str, roomId, seatId):
+    def submitCode(self, code_str, roomId, seatId):  # 提交验证码
         url = "http://172.16.47.84/Verify.aspx?seatid=" + roomId + seatId
         data = {
-            '__VIEWSTATE': self.VIEWSTATE,
-            '__EVENTVALIDATION': self.EVENTVALIDATION,
-            '__VIEWSTATEGENERATOR': self.VIEWSTATEGENERATOR,
+            "__VIEWSTATE": "/wEPDwUKMTcwNzM5ODc3NGRkxk3OrVjxT6behMtQpWcazajx8PyvSuwHitNzRtt/hW8=",
+            "__VIEWSTATEGENERATOR": "460BFA5D",
+            "__EVENTVALIDATION": "/wEdAANkcH5/1fjT1VTtjqvpdy4W7hv76BH8vu7iM4tkb8en1c34O/GfAV4V4n0wgFZHr3dW6dTyTKTMqYOytm8RFUOrs5GAAAhg2KMXDmC1pQgTog==",
             "TextBox3": code_str,
             "Button1": "提      交"
         }
 
         headers = {
+            'Host': '172.16.47.84',
             'Connection': 'Keep-Alive',
             'Accept-Language': 'zh-CN,zh;q=0.8',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36 SE 2.X MetaSr 1.0',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/58.0.3029.110 Safari/537.36 SE 2.X MetaSr 1.0',
             'Accept-Encoding': 'gzip, deflate, sdch',
             'Upgrade-Insecure-Requests': '1',
-            'Host': '172.16.47.84',
             "Content-Type": "application/x-www-form-urlencoded",
             "Referer": "http://172.16.47.84/Verify.aspx?seatid=" + roomId + seatId,
         }
-        post = self.session.post(url, data=data, headers=headers)
+        post_rsp = self.session.post(url, data=data, headers=headers)
+        if '该座位不可用，每天18:20开放明日预约！' in post_rsp.text:
+            return '该座位不可用，每天18:20开放明日预约！'
+        elif '该座位已经有人预约了，请试试其它座位！' in post_rsp.text:
+            return '该座位已经有人预约了，请试试其它座位！'
+        elif '错误' in post_rsp.text:
+            return '验证码错误'
+        else:
+            return '预约成功'
 
     def getddlRoom(self, ddlRoom, ddlDay):  # 获取教室预约人数 ddlDay=[今日|明日]
         ddlRoom = ddlRoom + "001"
@@ -147,7 +159,7 @@ class LibraryReservation:
             return '该座位已经有人预约了，请试试其它座位！'
 
     def appointmentTomorrow(self, roomId, seatId):  # 预约明日
-
+        # 发起预约请求
         url = "http://172.16.47.84/Verify.aspx?seatid=" + roomId + seatId
         headers = {
             'Host': '172.16.47.84',
@@ -158,14 +170,13 @@ class LibraryReservation:
             'Accept-Language': 'zh-CN,zh;q=0.9,en-GB;q=0.8,en-US;q=0.7,en;q=0.6',
             'Connection': 'keep-alive'
         }
-        print(url)
         get_rsp = self.session.get(url, headers=headers)
-        get_rsp.encoding = 'utf8'
         if '该座位不可用，每天18:20开放明日预约！' in get_rsp.text:
             return '该座位不可用，每天18:20开放明日预约！'
         if '该座位已经有人预约了，请试试其它座位！' in get_rsp.text:
             return '该座位已经有人预约了，请试试其它座位！'
-        print(get_rsp.text)
+        if '您已经预约了明日座位，不可重复预约！' in get_rsp.text:
+            return '您已经预约了明日座位，不可重复预约！'
         # 否则就是返回验证码
         # 获取验证码
         img_content = self.getCode(roomId + seatId)
@@ -193,35 +204,53 @@ class LibraryReservation:
             return '该座位已经有人预约了，请试试其它座位！'
 
 
-def a(account, password, room='', seats=''):
-    lr = LibraryReservation()
-    log = lr.logLibrary(account, password)
-    print(log)
-    if log != '登录成功':
-        return 0
-    # print(lr.appointmentTomorrow('3408', '107'))
 
-    rooms = lr.getddlDay()
+def loadAccount():
+    with open("account.txt", "r") as f:
+        for line in f.readlines():
+            line=line.strip('\n')
+            list = line.split(' ')
+            username = list[0]
+            password = list[1]
+            roomId = list[2]
+            seatIdList = list[3:]
+            myThread1 = myThread(username, password, roomId, seatIdList)
+            myThread1.start()
 
-    for room in rooms:
-        print(room+" 房间编号:"+rooms[room]+"  ")
-        #   print(lr.getddlRoom(rooms[room], '明日'))
-        print("座位编号: 001 - " + str(len(lr.StartSeatSelection(rooms[room])))+"  ")
+
+class myThread(threading.Thread):
+    def __init__(self, username, password, roomId='1201', seatIdList=None):
+        threading.Thread.__init__(self)
+        self.username = username
+        self.password = password
+        self.roomId = roomId
+        self.seatIdList = seatIdList
+
+    def run(self):
+        lr = LibraryReservation()
+        log = lr.logLibrary(self.username, self.password)
+        if log != '登录成功':
+            print(self.username + ": 账户或者密码错误")
+            return log
+        rooms = lr.getddlDay()
+        seat_number = self.seatIdList.__len__()
+        room_name = rooms[self.roomId]
+        flag = True;
+        while flag:
+            for i in range(0, seat_number):
+                rt = lr.appointmentTomorrow(self.roomId, self.seatIdList[i]);
+                if '成功' in rt :
+                    print(self.username + " 预约座位号 " + self.seatIdList[i] + " 成功! ")
+                    return
+                else:
+                    print(self.username + " 预约座位号 " + rt)
 
 
 def main():
-    a("2019021035", "2019021035")
-
     print("----------------欢迎使用图书馆预约系统---------------------")
     print('-----使用说明:')
     print('----- 输入格式:账号 密码 教室 座位号 座位号 座位号')
-    print('----- 账号 密码 教室必填项, 座位号可填1个到n个,不填为随机分配')
-    print('----- 填则优先选您准备的座位号,若已预约则预约其它座位')
-    print('-----教室:\n\t东区图书馆自习室201室 东区图书馆自习室401室\n' +
-          '\t中区图书馆自习室101室 中区图书馆自习室201室\n\t中区图书馆自习室206室 中区图书馆自习室211室 \n\t中区图书馆自习室302室\n' +
-          '\t西区图书馆自习室401室 西区图书馆自习室408室')
-    print('-----#如需多人预约只需要按照同样的格式输入多行即可')
-    print('-------------------------------------------------------')
+    loadAccount()
 
 
 if __name__ == '__main__':
