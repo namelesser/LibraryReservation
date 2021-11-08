@@ -26,15 +26,16 @@ class LibraryReservation:
         self.VIEWSTATE = select_VIEWSTATE['value']
         self.EVENTVALIDATION = select_EVENTVALIDATION['value']
 
+    # 获取验证码图片
     def getCode(self, seatId):
         url = "http://172.16.47.84/VerifyCode.aspx?seatid=" + seatId
         get_rsp = self.session.get(url)
         return get_rsp.content
 
-    def diffCode(self, img):  # 识别验证码 并返回
+    def diffCode(self, img):  # 识别验证码 并返回  验证码识别调用的是百度免费的,如需更精确可自行更换验证码接口
         img_base64 = base64.b64encode(img)
         request_url = "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic"
-        params = {"image": img_base64}
+        params = {"image": img_base64, "language_type": ""}
         access_token = '24.fe9b8289d047fe71a6f35572c4cf0b13.2592000.1635336606.282335-22546420'
         request_url = request_url + "?access_token=" + access_token
         headers = {'content-type': 'application/x-www-form-urlencoded'}
@@ -157,6 +158,13 @@ class LibraryReservation:
         get.encoding = 'utf-8'
         if '该座位已经有人预约了，请试试其它座位！' in get.text:
             return '该座位已经有人预约了，请试试其它座位！'
+        elif '您已经预约了今日座位，不可重复预约！' in get.text:
+            return "您已经预约了今日座位，不可重复预约！"
+        elif '今日预约成功' in get.text:
+            return '今日预约成功'
+        print(get.text)
+        print("未知错误")
+        return "未知错误"
 
     def appointmentTomorrow(self, roomId, seatId):  # 预约明日
         # 发起预约请求
@@ -204,11 +212,10 @@ class LibraryReservation:
             return '该座位已经有人预约了，请试试其它座位！'
 
 
-
 def loadAccount():
     with open("account.txt", "r") as f:
         for line in f.readlines():
-            line=line.strip('\n')
+            line = line.strip('\n')
             list = line.split(' ')
             username = list[0]
             password = list[1]
@@ -233,17 +240,39 @@ class myThread(threading.Thread):
             print(self.username + ": 账户或者密码错误")
             return log
         rooms = lr.getddlDay()
-        seat_number = self.seatIdList.__len__()
-        room_name = rooms[self.roomId]
+        try:
+            room_name = rooms[self.roomId]
+        except KeyError:
+            print("房间号填写错误,请参照文档.")
+            return
+
         flag = True;
         while flag:
+            seat_number = self.seatIdList.__len__()
             for i in range(0, seat_number):
-                rt = lr.appointmentTomorrow(self.roomId, self.seatIdList[i]);
-                if '成功' in rt :
+                if i >= len(self.seatIdList):
+                    continue
+                try:
+                    rt = lr.appointmentTomorrow(self.roomId, self.seatIdList[i])
+                except KeyError:
+                    print(self.username + " 预约座位号 " + self.seatIdList[i] + " 失败! 原因:" + self.seatIdList[
+                        i] + "可能座位号错误,如果座位号没有填错,请上 github 反馈.")
+                    self.seatIdList.remove(self.seatIdList[i])
+                    continue
+                if '成功' in rt:
                     print(self.username + " 预约座位号 " + self.seatIdList[i] + " 成功! ")
                     return
+                elif '您已经预约了' in rt:
+                    print(self.username + " 预约座位号 " + self.seatIdList[i] + "失败 原因:" + rt)
+                    return
+                elif '该座位已经有人预约了' in rt:
+                    print(self.username + " 预约座位号 " + self.seatIdList[i] + "失败 原因:" + rt)
+                    self.seatIdList.remove(self.seatIdList[i])
                 else:
-                    print(self.username + " 预约座位号 " + rt)
+                    print(self.username + " 预约座位号 " + self.seatIdList[i] + "失败 原因:" + rt)
+            if len(self.seatIdList) == 0:
+                print(self.username + " 所有座位已被预约,请重新选座")
+                return
 
 
 def main():
