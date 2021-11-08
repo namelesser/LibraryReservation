@@ -160,11 +160,11 @@ class LibraryReservation:
             return '该座位已经有人预约了，请试试其它座位！'
         elif '您已经预约了今日座位，不可重复预约！' in get.text:
             return "您已经预约了今日座位，不可重复预约！"
+        elif '账户被锁定，无法预约！' in get.text:
+            return '账户被锁定，无法预约！'
         elif '今日预约成功' in get.text:
             return '今日预约成功'
-        print(get.text)
-        print("未知错误")
-        return "未知错误"
+        return "未知错误,请检查房间号,座位号是否正确"
 
     def appointmentTomorrow(self, roomId, seatId):  # 预约明日
         # 发起预约请求
@@ -185,6 +185,8 @@ class LibraryReservation:
             return '该座位已经有人预约了，请试试其它座位！'
         if '您已经预约了明日座位，不可重复预约！' in get_rsp.text:
             return '您已经预约了明日座位，不可重复预约！'
+        if '账户被锁定，无法预约！' in get_rsp.text:
+            return '账户被锁定，无法预约！'
         # 否则就是返回验证码
         # 获取验证码
         img_content = self.getCode(roomId + seatId)
@@ -260,6 +262,7 @@ class myThread(threading.Thread):
                     self.seatIdList.remove(self.seatIdList[i])
                     continue
                 if '成功' in rt:
+                    print(rt)
                     print(self.username + " 预约座位号 " + self.seatIdList[i] + " 成功! ")
                     return
                 elif '您已经预约了' in rt:
@@ -268,6 +271,9 @@ class myThread(threading.Thread):
                 elif '该座位已经有人预约了' in rt:
                     print(self.username + " 预约座位号 " + self.seatIdList[i] + "失败 原因:" + rt)
                     self.seatIdList.remove(self.seatIdList[i])
+                elif '账户被锁定' in rt:
+                    print(self.username + "预约座位号 " + self.seatIdList[i] + "失败 原因:" + rt)
+                    return
                 else:
                     print(self.username + " 预约座位号 " + self.seatIdList[i] + "失败 原因:" + rt)
             if len(self.seatIdList) == 0:
