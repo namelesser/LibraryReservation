@@ -46,13 +46,21 @@ class LibraryReservation:
 
     def diffCode(self, img):  # 识别验证码 并返回  验证码识别调用的是百度免费的,如需更精确可自行更换验证码接口
         img_base64 = base64.b64encode(img)
+        # 回去百度 api 授权
+        host = 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=H6qngavUdbaeHxOlAtSZGPN0&client_secret=tdGtA5Pkt4A3hntrla0orV7Wog1PMDHN'
+        access_token = requests.get(host).json()['access_token']
+
+        # 调用百度 api
         request_url = "https://aip.baidubce.com/rest/2.0/ocr/v1/accurate_basic"
-        params = {"image": img_base64, "language_type": ""}
-        access_token = '24.fe9b8289d047fe71a6f35572c4cf0b13.2592000.1635336606.282335-22546420'
+        params = {"image": img_base64, "language_type": "ENG"}
         request_url = request_url + "?access_token=" + access_token
         headers = {'content-type': 'application/x-www-form-urlencoded'}
         response = requests.post(request_url, data=params, headers=headers)
-        code = response.json()['words_result'][0]['words']
+        try:
+            code = response.json()["words_result"][0]['words'].replace(" ", "")
+        except IndexError:
+            print("验证码识别异常: " + response.json())
+            code = response.json()
         return code
 
     def logLibrary(self):  # 登录
@@ -258,19 +266,19 @@ class MyThread(threading.Thread):
 
         while True:
             seat_number = self.user.seatIdList.__len__()
-            for i in range(0, seat_number ):
+            for i in range(0, seat_number):
                 if i >= len(self.user.seatIdList):
                     continue
-                try:
-                    if self.appointment.__eq__("1"):
-                        rt = lr.appointment(self.user.roomId, self.user.seatIdList[i])
-                    else:
-                        rt = lr.appointmentTomorrow(self.user.roomId, self.user.seatIdList[i])
-                except KeyError:
-                    print(self.user.username + " 预约座位号 " + self.user.seatIdList[i] + " 失败! 原因:" + self.user.seatIdList[
-                        i] + "可能座位号错误,如果座位号没有填错,请上 github 反馈.")
-                    self.user.seatIdList.remove(self.user.seatIdList[i])
-                    continue
+                # try:
+                if self.appointment.__eq__("1"):
+                    rt = lr.appointment(self.user.roomId, self.user.seatIdList[i])
+                else:
+                    rt = lr.appointmentTomorrow(self.user.roomId, self.user.seatIdList[i])
+                # except KeyError:
+                #     print(self.user.username + " 预约座位号 " + self.user.seatIdList[i] + " 失败! 原因:" + self.user.seatIdList[
+                #         i] + "可能座位号错误,如果座位号没有填错,请上 github 反馈.")
+                #     self.user.seatIdList.remove(self.user.seatIdList[i])
+                #     continue
                 if '成功' in rt:
                     print(rt)
                     print(self.user.username + " 预约座位号 " + self.user.seatIdList[i] + " 成功! ")
@@ -299,12 +307,7 @@ def computeTimeDifference():
     HMS = nowTime.split(' ')[1].split(':')
 
     # 构造出 当天 19 点 19 分 45 秒
-    # 替换时
-    aimTime = nowTime.replace(HMS[0], '18')
-    # 替换分
-    aimTime = aimTime.replace(HMS[1], '19')
-    # 替换秒
-    aimTime = aimTime.replace(HMS[2], '55')
+    aimTime = nowTime.split(' ')[0] + " 18:20:00"
     # 返回 现在时间-目标时间
     print("现在时间:" + nowTime)
     print("开抢时间:" + aimTime)
@@ -343,3 +346,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=H6qngavUdbaeHxOlAtSZGPN0&client_secret=tdGtA5Pkt4A3hntrla0orV7Wog1PMDHN&
